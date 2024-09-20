@@ -44,8 +44,8 @@ int main(int argc, char* argv[])
 	// освободить выделенную память
 	cudaFree(dev);
 	
-	for (int idx = 0; idx < N; idx++)
-		printf("a[%d] = %.5f\n", idx, a[idx]);
+	//for (int idx = 0; idx < N; idx++)
+	//	printf("a[%d] = %.5f\n", idx, a[idx]);
 	free(a);
 	
 	int deviceCount;
