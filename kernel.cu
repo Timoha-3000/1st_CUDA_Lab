@@ -15,39 +15,35 @@ __global__ void kernel(float* data)
 }
 int main(int argc, char* argv[])
 {
-	// Начало измерения времени
-	clock_t start_time = clock();
-
-	float* a = (float*)malloc(N * sizeof(float));
-	float* dev = nullptr;
-
-	// выделить память на GPU
-	cudaMalloc((void**)&dev, N * sizeof(float));
-
 	// Получаем информацию об устройстве
 	cudaDeviceProp devProp;
 	cudaGetDeviceProperties(&devProp, 0);  // Используем первый GPU
 	int numMultiprocessors = devProp.multiProcessorCount;
 	int maxThreadsPerBlock = devProp.maxThreadsPerBlock;
-
-	// Вычисление количества блоков
-	int blocksPerMultiprocessor = maxThreadsPerBlock / maxThreadsPerBlock;
-	int numBlocks = numMultiprocessors * blocksPerMultiprocessor;
-
-	// Конфигурация запуска
-	kernel << <dim3(blocksPerMultiprocessor), dim3(maxThreadsPerBlock) >> > (dev);
-
+	int maxThreadsPerPerMultiProcessor = devProp.maxThreadsPerMultiProcessor;
+	cudaEvent_t start, stop;  //описываем переменные типа  cudaEvent_t 
+	float       gpuTime = 0.0f;
+	// создаем события начала и окончания выполнения ядра 
+	cudaEventCreate(&start);
+	cudaEventCreate(&stop);
+	//привязываем событие start  к данному месту 
+	cudaEventRecord(start, 0);
+	
+	float* a = (float*)malloc(N * sizeof(float));
+	float* dev = nullptr;
+	// выделить память на GPU
+	cudaMalloc((void**)&dev, N * sizeof(float));
 	// конфигурация запуска N нитей
-	//kernel << <dim3((N / 512), 1), dim3(512, 1) >> > (dev);
+	//kernel << <maxThreadsPerPerMultiProcessor, maxThreadsPerBlock * numMultiprocessors >> > (dev);
+	kernel<<<dim3((N/512),1), dim3(512,1)>>> ( dev ); 
 	// скопировать результаты в память CPU
 	cudaMemcpy(a, dev, N * sizeof(float), cudaMemcpyDeviceToHost);
 	// освободить выделенную память
 	cudaFree(dev);
-	
-	//for (int idx = 0; idx < N; idx++)
-	//	printf("a[%d] = %.5f\n", idx, a[idx]);
+	for (int idx = 0; idx < N; idx++)
+		printf("a[%d] = %.5f\n", idx, a[idx]);
 	free(a);
-	
+
 	int deviceCount;
 	//cudaDeviceProp devProp;
 	cudaGetDeviceCount(&deviceCount);
@@ -65,17 +61,20 @@ int main(int argc, char* argv[])
 		printf("Max threads per block : %d\n", devProp.maxThreadsPerBlock);
 		printf("Total constant memory : %d\n", devProp.totalConstMem);
 		printf("MultiProcessor count : %d\n", devProp.multiProcessorCount);
-		printf("Kernel Exec Timeout Enabled : %d\n", numBlocks);
-		printf("Kernel Exec Timeout Enabled : %d\n", devProp.kernelExecTimeoutEnabled);
+		printf("Blocks PerMultiprocessor  : %d\n", maxThreadsPerBlock);
+		printf("maxThreadsPerPerMultiProcessor : %d\n", maxThreadsPerPerMultiProcessor);
 	}
 
-	// Конец измерения времени
-	clock_t end_time = clock();
+	//привязываем событие stop  к данному месту 
+	cudaEventRecord(stop, 0);
 
-	// Разница во времени
-	double elapsed_time = (double)(end_time - start_time) / CLOCKS_PER_SEC;
-
-	printf("Время выполнения: %f секунд\n", elapsed_time);
+	cudaEventSynchronize(stop);
+	// запрашиваем время между событиями 
+	cudaEventElapsedTime(&gpuTime, start, stop);
+	printf("time spent executing by the GPU: %.5f ms\n", gpuTime);
+	// уничтожаем созданные события 
+	cudaEventDestroy(start);
+	cudaEventDestroy(stop);
 
 	return 0;
 }
